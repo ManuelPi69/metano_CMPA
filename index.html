@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#07111b" />
+  <meta name="description" content="Laboratório WebXR interativo para estudar a geometria tetraédrica do metano, VSEPR, hibridização sp3 e ângulos de ligação." />
+  <title>Laboratório Molecular | Metano CH₄</title>
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
+  </script>
+  <style>
+    :root {
+      --bg: #07111b;
+      --panel: rgba(13, 27, 40, .86);
+      --panel-2: rgba(18, 36, 52, .9);
+      --line: rgba(148, 181, 204, .17);
+      --text: #edf5fb;
+      --muted: #9db2c3;
+      --cyan: #69e1ef;
+      --blue: #78aef7;
+      --mint: #7be3c0;
+      --amber: #ffc879;
+      --danger: #ff8c8c;
+      --shadow: 0 18px 50px rgba(0,0,0,.26);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; color: var(--text); background: var(--bg); font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    button { font: inherit; }
+    #app { width: 100%; height: 100%; position: relative; isolation: isolate; background: radial-gradient(ellipse at 50% 42%, #163047 0%, #0b1a28 38%, #06101a 100%); }
+    #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
+    .topbar { position: absolute; z-index: 5; top: 0; left: 0; right: 0; height: 72px; display:flex; align-items:center; justify-content:space-between; padding: 0 24px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, rgba(5,13,21,.94), rgba(5,13,21,.58)); backdrop-filter: blur(15px); }
+    .brand { display:flex; gap:12px; align-items:center; min-width:0; }
+    .brand-mark { width:38px; height:38px; border-radius:12px; background: linear-gradient(145deg, rgba(105,225,239,.22), rgba(120,174,247,.12)); border:1px solid rgba(105,225,239,.38); display:grid; place-items:center; color:var(--cyan); font-weight:800; letter-spacing:-1px; box-shadow:0 0 24px rgba(105,225,239,.12); }
+    .brand h1 { font-size:14px; line-height:1.2; letter-spacing:.11em; text-transform:uppercase; margin:0; font-weight:750; }
+    .brand p { color:var(--muted); font-size:11px; margin:3px 0 0; letter-spacing:.02em; }
+    .top-actions { display:flex; align-items:center; gap:10px; }
+    .pill { display:inline-flex; align-items:center; gap:7px; padding:8px 11px; border:1px solid var(--line); border-radius:999px; color:#c5d7e4; background:rgba(16,34,49,.7); font-size:11px; letter-spacing:.04em; white-space:nowrap; }
+    .live-dot { height:7px; width:7px; background:var(--mint); border-radius:50%; box-shadow:0 0 12px var(--mint); }
+    #vr-slot { display:inline-flex; }
+    #vr-slot button { position:static !important; width:auto !important; height:auto !important; margin:0 !important; padding:10px 15px !important; border:1px solid rgba(105,225,239,.45) !important; border-radius:10px !important; color:#06121c !important; background:var(--cyan) !important; font-size:11px !important; font-weight:800 !important; letter-spacing:.08em !important; box-shadow:0 5px 22px rgba(105,225,239,.18); }
+    .layout { position:absolute; z-index:2; inset:88px 18px 18px; display:grid; grid-template-columns: 275px minmax(330px,1fr) 300px; gap:14px; pointer-events:none; }
+    .panel { pointer-events:auto; min-height:0; border:1px solid var(--line); background:var(--panel); border-radius:17px; box-shadow:var(--shadow); backdrop-filter:blur(18px); overflow:hidden; }
+    .left-panel, .right-panel { display:flex; flex-direction:column; }
+    .panel-head { padding:17px 17px 13px; border-bottom:1px solid var(--line); }
+    .eyebrow { color:var(--cyan); font-size:9px; font-weight:800; letter-spacing:.17em; text-transform:uppercase; margin-bottom:7px; }
+    .panel-head h2 { font-size:16px; margin:0; font-weight:700; letter-spacing:-.02em; }
+    .panel-head p { color:var(--muted); font-size:11px; line-height:1.5; margin:7px 0 0; }
+    .trail-progress { padding:13px 17px 11px; }
+    .progress-meta { display:flex; justify-content:space-between; color:var(--muted); font-size:10px; margin-bottom:8px; }
+    .progress-track { height:5px; border-radius:20px; background:rgba(160,190,210,.12); overflow:hidden; }
+    .progress-fill { width:0%; height:100%; background:linear-gradient(90deg,var(--cyan),var(--mint)); border-radius:20px; transition:width .35s ease; }
+    .steps { padding:2px 9px 14px; overflow:auto; }
+    .step { width:100%; display:flex; align-items:center; gap:11px; padding:11px 9px; border:1px solid transparent; color:var(--text); text-align:left; background:transparent; border-radius:12px; cursor:pointer; transition:.2s ease; }
+    .step:hover { background:rgba(105,225,239,.06); }
+    .step.active { background:rgba(105,225,239,.1); border-color:rgba(105,225,239,.27); }
+    .step.done .step-num { background:rgba(123,227,192,.18); border-color:rgba(123,227,192,.36); color:var(--mint); }
+    .step-num { flex:none; width:27px; height:27px; border:1px solid rgba(160,190,210,.2); border-radius:9px; display:grid; place-items:center; color:#9fb2c0; font-size:10px; font-weight:800; }
+    .step-copy { min-width:0; flex:1; }
+    .step-copy strong { display:block; font-size:11px; font-weight:650; }
+    .step-copy small { display:block; margin-top:3px; color:var(--muted); font-size:9px; }
+    .step-time { color:#839aaa; font-size:9px; white-space:nowrap; }
+    .center-area { position:relative; min-width:0; min-height:0; pointer-events:none; }
+    .center-caption { position:absolute; top:16px; left:17px; z-index:2; max-width:260px; padding:10px 13px; border:1px solid var(--line); border-radius:12px; background:rgba(8,19,29,.68); backdrop-filter:blur(10px); pointer-events:auto; }
+    .center-caption strong { font-size:11px; display:block; }
+    .center-caption span { font-size:10px; color:var(--muted); display:block; margin-top:4px; line-height:1.35; }
+    .interaction-hint { position:absolute; z-index:2; bottom:18px; left:50%; transform:translateX(-50%); border:1px solid var(--line); border-radius:999px; padding:9px 14px; color:#c7d8e3; background:rgba(8,19,29,.7); font-size:10px; white-space:nowrap; backdrop-filter:blur(9px); pointer-events:auto; }
+    .center-controls { position:absolute; top:16px; right:16px; display:flex; flex-direction:column; gap:7px; pointer-events:auto; }
+    .icon-btn { min-width:36px; height:34px; padding:0 11px; border-radius:10px; border:1px solid var(--line); background:rgba(10,24,36,.78); color:#dceaf2; cursor:pointer; font-size:10px; font-weight:700; backdrop-filter:blur(10px); }
+    .icon-btn:hover, .icon-btn.active { border-color:rgba(105,225,239,.48); color:var(--cyan); background:rgba(105,225,239,.1); }
+    .right-body { padding:15px 16px 17px; overflow:auto; }
+    .stage-title { font-size:14px; margin:0 0 7px; letter-spacing:-.02em; }
+    .stage-text { color:#b4c6d3; font-size:11px; line-height:1.6; margin:0 0 13px; }
+    .concept-card { border:1px solid rgba(105,225,239,.16); border-radius:12px; padding:11px 12px; background:rgba(105,225,239,.055); margin:11px 0; }
+    .concept-card strong { display:block; font-size:11px; color:#dffaff; margin-bottom:5px; }
+    .concept-card p { color:#acc1ce; font-size:10px; line-height:1.55; margin:0; }
+    .metric-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
+    .metric { border:1px solid var(--line); border-radius:11px; padding:10px; background:rgba(255,255,255,.025); }
+    .metric span { display:block; color:var(--muted); font-size:9px; }
+    .metric strong { display:block; margin-top:5px; font-size:19px; line-height:1; letter-spacing:-.04em; }
+    .metric em { font-style:normal; color:#91a9b9; font-size:9px; }
+    .chart-wrap { border:1px solid var(--line); border-radius:12px; padding:10px; margin:12px 0; background:rgba(2,10,17,.32); }
+    .chart-head { display:flex; justify-content:space-between; gap:8px; font-size:10px; color:#d4e2ea; margin-bottom:5px; }
+    .chart-head small { color:var(--muted); font-size:9px; }
+    #energy-chart { display:block; width:100%; height:95px; }
+    .chart-note { color:#7f99aa; font-size:9px; line-height:1.4; margin-top:4px; }
+    .button-row { display:flex; flex-wrap:wrap; gap:7px; margin-top:13px; }
+    .action { border:1px solid rgba(105,225,239,.34); color:#06141d; background:var(--cyan); padding:9px 11px; border-radius:9px; font-size:10px; font-weight:800; cursor:pointer; transition:.18s ease; }
+    .action:hover { filter:brightness(1.08); transform:translateY(-1px); }
+    .action.secondary { background:rgba(105,225,239,.08); color:#d8f9ff; border-color:rgba(105,225,239,.25); }
+    .action.ghost { background:rgba(255,255,255,.035); color:#c3d2dd; border-color:var(--line); }
+    .action:disabled { opacity:.4; cursor:not-allowed; transform:none; }
+    .mini-label { font-size:9px; font-weight:800; color:#8ea6b5; letter-spacing:.12em; text-transform:uppercase; margin:15px 0 7px; }
+    .projection { width:100%; border:1px solid var(--line); border-radius:12px; background:rgba(2,10,17,.28); padding:8px; }
+    .projection svg { width:100%; height:auto; display:block; }
+    .legend { display:flex; flex-wrap:wrap; gap:12px; color:#91a7b5; font-size:9px; margin:8px 1px 0; }
+    .legend i { display:inline-block; width:15px; height:2px; vertical-align:middle; background:#d8eaf4; margin-right:5px; }
+    .legend i.dash { background:repeating-linear-gradient(90deg,#d8eaf4 0 3px,transparent 3px 6px); }
+    .quiz { border:1px solid rgba(105,225,239,.2); background:rgba(5,17,27,.52); border-radius:13px; padding:13px; }
+    .quiz-top { display:flex; justify-content:space-between; color:var(--muted); font-size:9px; margin-bottom:10px; }
+    .quiz h3 { font-size:12px; line-height:1.5; margin:0 0 11px; }
+    .option { display:flex; gap:8px; width:100%; text-align:left; align-items:flex-start; padding:9px 10px; border:1px solid var(--line); border-radius:9px; background:rgba(255,255,255,.025); color:#cbd9e2; font-size:10px; line-height:1.4; margin:6px 0; cursor:pointer; }
+    .option:hover { border-color:rgba(105,225,239,.4); }
+    .option.selected { border-color:rgba(105,225,239,.55); background:rgba(105,225,239,.09); }
+    .option.correct { border-color:rgba(123,227,192,.6); background:rgba(123,227,192,.1); }
+    .option.wrong { border-color:rgba(255,140,140,.6); background:rgba(255,140,140,.08); }
+    .option b { flex:none; color:var(--cyan); }
+    .feedback { color:#bcd0db; font-size:10px; line-height:1.5; margin:10px 0 0; min-height:28px; }
+    .quiz-footer { display:flex; justify-content:space-between; gap:8px; align-items:center; margin-top:10px; }
+    .quiz-score { font-size:10px; color:var(--mint); font-weight:750; }
+    .footnote { color:#7891a2; font-size:9px; line-height:1.45; margin-top:13px; }
+    .toast { position:absolute; z-index:8; left:50%; bottom:25px; transform:translate(-50%,15px); padding:10px 15px; border:1px solid rgba(105,225,239,.3); border-radius:999px; background:rgba(5,18,28,.94); color:#dcfaff; font-size:11px; box-shadow:var(--shadow); opacity:0; pointer-events:none; transition:.25s ease; }
+    .toast.show { opacity:1; transform:translate(-50%,0); }
+    .mobile-menu { display:none; }
+    .vr-note { color:var(--amber); }
+    @media (max-width: 1040px) {
+      .layout { grid-template-columns:225px minmax(280px,1fr) 270px; gap:9px; inset:82px 10px 10px; }
+      .topbar { padding:0 14px; }
+      .panel-head { padding:13px 13px 10px; }
+      .right-body { padding:12px; }
+      .step { padding:9px 7px; }
+    }
+    @media (max-width: 760px) {
+      html,body,#app { overflow:auto; min-height:100%; height:100%; }
+      #scene { position:fixed; }
+      .topbar { position:fixed; height:60px; padding:0 10px; }
+      .brand-mark { width:33px; height:33px; }
+      .brand h1 { font-size:11px; }
+      .brand p, .top-actions .pill { display:none; }
+      #vr-slot button { padding:9px 10px !important; font-size:9px !important; }
+      .layout { position:relative; inset:auto; padding:70px 9px 12px; display:flex; flex-direction:column; gap:9px; pointer-events:none; min-height:100%; }
+      .center-area { order:0; height:46vh; min-height:300px; flex:none; border:1px solid var(--line); border-radius:15px; background:rgba(5,15,24,.15); overflow:hidden; }
+      .left-panel { order:1; max-height:260px; }
+      .right-panel { order:2; min-height:380px; }
+      .center-caption { top:9px; left:9px; padding:8px 10px; max-width:195px; }
+      .center-caption strong { font-size:10px; }
+      .center-caption span { font-size:9px; }
+      .center-controls { top:9px; right:9px; }
+      .interaction-hint { bottom:9px; font-size:9px; max-width:calc(100% - 20px); overflow:hidden; }
+      .steps { display:grid; grid-template-columns:1fr 1fr; }
+      .step { min-width:0; }
+      .mobile-menu { display:block; }
+    }
+    @media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior:auto !important; transition:none !important; } }
+  </style>
+</head>
+<body>
+<div id="app">
+  <canvas id="scene" aria-label="Modelo tridimensional interativo do metano"></canvas>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">CH₄</div>
+      <div><h1>Laboratório Molecular</h1><p>Geometria tetraédrica · VSEPR · Hibridização sp³</p></div>
+    </div>
+    <div class="top-actions">
+      <span class="pill"><i class="live-dot"></i> EXPERIÊNCIA INTERATIVA</span>
+      <span class="pill">TRILHA · 40 MIN</span>
+      <div id="vr-slot"></div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="panel left-panel">
+      <div class="panel-head"><div class="eyebrow">Percurso de aprendizagem</div><h2>Da hipótese à molécula</h2><p>Seis etapas para investigar por que o metano não é plano.</p></div>
+      <div class="trail-progress"><div class="progress-meta"><span>Seu percurso</span><strong id="progress-label">0 de 6 etapas</strong></div><div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div></div>
+      <nav class="steps" id="steps-nav" aria-label="Etapas da trilha">
+        <button class="step active" data-step="0"><span class="step-num">01</span><span class="step-copy"><strong>O desafio 2D</strong><small>Questione o desenho plano</small></span><span class="step-time">5 min</span></button>
+        <button class="step" data-step="1"><span class="step-num">02</span><span class="step-copy"><strong>VSEPR em ação</strong><small>Domínios eletrônicos</small></span><span class="step-time">6 min</span></button>
+        <button class="step" data-step="2"><span class="step-num">03</span><span class="step-copy"><strong>Monte o CH₄</strong><small>Arraste os hidrogênios</small></span><span class="step-time">10 min</span></button>
+        <button class="step" data-step="3"><span class="step-num">04</span><span class="step-copy"><strong>Meça o ângulo</strong><small>Transferidor tridimensional</small></span><span class="step-time">7 min</span></button>
+        <button class="step" data-step="4"><span class="step-num">05</span><span class="step-copy"><strong>Projete em 2D</strong><small>Cunha cheia e tracejada</small></span><span class="step-time">6 min</span></button>
+        <button class="step" data-step="5"><span class="step-num">06</span><span class="step-copy"><strong>Desafio final</strong><small>Quiz de consolidação</small></span><span class="step-time">6 min</span></button>
+      </nav>
+    </aside>
+
+    <section class="center-area" aria-label="Área de visualização 3D">
+      <div class="center-caption"><strong id="scene-title">Estrutura do metano · CH₄</strong><span id="scene-subtitle">Um carbono, quatro hidrogênios e uma geometria que precisa sair do plano.</span></div>
+      <div class="center-controls">
+        <button class="icon-btn" id="view-reset" title="Restaurar enquadramento">⟳ VISÃO</button>
+        <button class="icon-btn" id="rotate-toggle" title="Alternar rotação automática">ROTAÇÃO: OFF</button>
+      </div>
+      <div class="interaction-hint" id="interaction-hint">Arraste cada H até perto do carbono · ou use “Organizar tetraedro”</div>
+    </section>
+
+    <aside class="panel right-panel">
+      <div class="panel-head"><div class="eyebrow" id="right-eyebrow">Estação 01 · Investigação</div><h2 id="right-heading">O que o desenho esconde?</h2></div>
+      <div class="right-body" id="stage-content">
+        <p class="stage-text">No quadro, quatro ligações podem parecer uma cruz. Mas um desenho bidimensional não informa, sozinho, quais ligações estão à frente ou atrás do plano.</p>
+        <div class="concept-card"><strong>Antes de entrar no laboratório</strong><p>Imagine quatro pares ligantes ao redor do carbono. Se eles ficassem no mesmo plano, poderiam se afastar tanto quanto no espaço?</p></div>
+        <div class="metric-row"><div class="metric"><span>Fórmula</span><strong>CH₄</strong><em>metano</em></div><div class="metric"><span>Domínios ligantes</span><strong>4</strong><em>ao redor do C</em></div></div>
+        <div class="mini-label">Pergunta norteadora</div><p class="stage-text">Como os quatro pares de elétrons podem ficar o mais afastados possível?</p>
+        <div class="button-row"><button class="action" id="stage-next">Começar a explorar →</button></div>
+        <p class="footnote">Dica didática: peça aos estudantes que façam uma previsão do ângulo antes de revelar o modelo 3D.</p>
+      </div>
+    </aside>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+  const $ = (id) => document.getElementById(id);
+  const canvas = $('scene');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x07111b);
+  scene.fog = new THREE.FogExp2(0x07111b, 0.025);
+
+  const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 100);
+  camera.position.set(0, 0.15, 9.2);
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.8));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.18;
+  renderer.xr.enabled = true;
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.055;
+  controls.minDistance = 5.2;
+  controls.maxDistance = 14;
+  controls.target.set(0, 0, 0);
+
+  scene.add(new THREE.HemisphereLight(0xb8e7ff, 0x101d2a, 1.35));
+  const keyLight = new THREE.DirectionalLight(0xdaf7ff, 2.1); keyLight.position.set(-4, 6, 7); scene.add(keyLight);
+  const rimLight = new THREE.PointLight(0x48cde2, 32, 18); rimLight.position.set(4, 1, -2); scene.add(rimLight);
+  const fillLight = new THREE.PointLight(0x5e8eff, 18, 15); fillLight.position.set(-4, -2, 3); scene.add(fillLight);
+
+  const world = new THREE.Group(); scene.add(world);
+  const molecule = new THREE.Group(); world.add(molecule);
+  const environment = new THREE.Group(); world.add(environment);
+
+  // Bancada flutuante e referências discretas de laboratório.
+  const table = new THREE.Mesh(new THREE.CylinderGeometry(3.7, 3.95, 0.12, 80), new THREE.MeshStandardMaterial({ color: 0x132b3a, metalness: .58, roughness: .3, transparent: true, opacity: .82 }));
+  table.position.set(0, -2.35, 0); environment.add(table);
+  const tableRim = new THREE.Mesh(new THREE.TorusGeometry(3.76, .025, 8, 100), new THREE.MeshBasicMaterial({ color: 0x4bc8db, transparent: true, opacity: .55 }));
+  tableRim.rotation.x = Math.PI / 2; tableRim.position.y = -2.28; environment.add(tableRim);
+  const grid = new THREE.GridHelper(22, 44, 0x23495b, 0x163044); grid.position.y = -2.43; grid.material.transparent = true; grid.material.opacity = .2; environment.add(grid);
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(2.65, .009, 6, 120), new THREE.MeshBasicMaterial({ color: 0x5cd4e5, transparent: true, opacity: .24 })); halo.rotation.x = Math.PI / 2; halo.position.y = -2.25; environment.add(halo);
+  // Pontos de luz no fundo, sem poluir a área de estudo.
+  const starGeo = new THREE.BufferGeometry();
+  const starPos = [];
+  for (let i=0;i<170;i++) starPos.push((Math.random()-.5)*25, (Math.random()-.5)*14, -7-Math.random()*12);
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos,3));
+  const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0x7ca7bc, size: .018, transparent: true, opacity: .34 })); scene.add(stars);
+
+  const carbonMat = new THREE.MeshPhysicalMaterial({ color: 0x182b39, metalness: .24, roughness: .22, clearcoat: .85, clearcoatRoughness: .16, emissive: 0x0a4054, emissiveIntensity: .42 });
+  const hydrogenMat = new THREE.MeshPhysicalMaterial({ color: 0xe8f5fb, metalness: .08, roughness: .2, clearcoat: 1, clearcoatRoughness: .08, emissive: 0x183c4c, emissiveIntensity: .14 });
+  const bondMat = new THREE.MeshStandardMaterial({ color: 0x80dce8, metalness: .42, roughness: .25, emissive: 0x144b5a, emissiveIntensity: .28 });
+  const cGeo = new THREE.SphereGeometry(.48, 48, 40);
+  const hGeo = new THREE.SphereGeometry(.31, 36, 32);
+  const carbon = new THREE.Mesh(cGeo, carbonMat); carbon.userData.kind='carbon'; molecule.add(carbon);
+  const cGlow = new THREE.Mesh(new THREE.SphereGeometry(.62, 40, 32), new THREE.MeshBasicMaterial({ color: 0x3ed3e6, transparent: true, opacity: .08, side: THREE.BackSide })); carbon.add(cGlow);
+
+  function makeLabel(text, color='#e8f7fc', scale=1) {
+    const c = document.createElement('canvas'); c.width=256; c.height=128;
+    const ctx=c.getContext('2d'); ctx.clearRect(0,0,256,128);
+    ctx.font='700 70px Arial'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.shadowColor='rgba(0,0,0,.8)'; ctx.shadowBlur=14; ctx.fillStyle=color; ctx.fillText(text,128,64);
+    const tex=new THREE.CanvasTexture(c); tex.colorSpace=THREE.SRGBColorSpace;
+    const mat=new THREE.SpriteMaterial({ map:tex, transparent:true, depthWrite:false });
+    const s=new THREE.Sprite(mat); s.scale.set(.65*scale,.33*scale,1); return s;
+  }
+  const carbonLabel = makeLabel('C','#a9f1fa',1.05); carbonLabel.position.set(0,0,.53); carbon.add(carbonLabel);
+
+  const tetra = [
+    new THREE.Vector3(1,1,1).normalize(),
+    new THREE.Vector3(1,-1,-1).normalize(),
+    new THREE.Vector3(-1,1,-1).normalize(),
+    new THREE.Vector3(-1,-1,1).normalize()
+  ];
+  const targetRadius = 2.0;
+  const hydrogenAtoms = [];
+  const bonds = [];
+  const atomPickables = [carbon];
+  const staging = [
+    new THREE.Vector3(-3.15, .7, .3), new THREE.Vector3(3.0, .65, -.2),
+    new THREE.Vector3(-2.4,-1.15,.55), new THREE.Vector3(2.55,-1.15,.4)
+  ];
+  for (let i=0;i<4;i++) {
+    const atom = new THREE.Mesh(hGeo, hydrogenMat.clone());
+    atom.position.copy(staging[i]); atom.userData.kind='hydrogen'; atom.userData.index=i; atom.userData.attached=false;
+    atom.material.emissiveIntensity=.14;
+    const label=makeLabel('H','#f3fbff',.82); label.position.set(0,0,.34); atom.add(label);
+    molecule.add(atom); hydrogenAtoms.push(atom); atomPickables.push(atom);
+    const bond = new THREE.Mesh(new THREE.CylinderGeometry(.075,.075,1,16), bondMat.clone()); bond.visible=false; molecule.add(bond); bonds.push(bond);
+  }
+
+  // Arcos e rótulo do transferidor 3D.
+  const protractorGroup = new THREE.Group(); molecule.add(protractorGroup); protractorGroup.visible=false;
+  const angleLineMat = new THREE.LineBasicMaterial({ color: 0xffd18b, transparent:true, opacity:.95 });
+  let angleLabel = null;
+  function clearProtractor(){
+    while(protractorGroup.children.length) { const o=protractorGroup.children[0]; protractorGroup.remove(o); if(o.geometry)o.geometry.dispose(); if(o.material && o.material!==angleLineMat && o.material.dispose)o.material.dispose(); }
+    angleLabel=null;
+  }
+  function drawProtractor(){
+    clearProtractor();
+    const attached=hydrogenAtoms.filter(a=>a.userData.attached);
+    if(attached.length<2) return;
+    const a=attached[0].position.clone().normalize(), b=attached[1].position.clone().normalize();
+    const arcPts=[]; const dot=Math.max(-1,Math.min(1,a.dot(b))); const theta=Math.acos(dot); const normal=new THREE.Vector3().crossVectors(a,b).normalize();
+    if(normal.length()<.001) normal.set(0,0,1);
+    const radius=.78;
+    for(let i=0;i<=40;i++){ const t=i/40*theta; const v=a.clone().multiplyScalar(Math.cos(t)).add(normal.clone().cross(a).multiplyScalar(Math.sin(t))).multiplyScalar(radius); arcPts.push(v); }
+    const geom=new THREE.BufferGeometry().setFromPoints(arcPts); protractorGroup.add(new THREE.Line(geom,angleLineMat));
+    const mid=arcPts[Math.floor(arcPts.length/2)].clone();
+    const sprite=makeLabel(`${(theta*180/Math.PI).toFixed(1)}°`,'#ffd18b',.78); sprite.position.copy(mid.multiplyScalar(1.28)); protractorGroup.add(sprite);
+  }
+
+  let attachedCount=0;
+  let rotationOn=false;
+  let showProjection=false;
+  let currentStage=0;
+  let completed=new Set();
+  let dragging=null;
+  let dragController=null;
+  let pointerDown=false;
+  const raycaster=new THREE.Raycaster();
+  const pointer=new THREE.Vector2();
+  const dragPlane=new THREE.Plane();
+  const dragOffset=new THREE.Vector3();
+  const tmpVec=new THREE.Vector3();
+  const tmpDir=new THREE.Vector3();
+  const smooth=.16;
+
+  function toast(message){ const el=$('toast'); el.textContent=message; el.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>el.classList.remove('show'),2300); }
+  function updateBond(i){
+    const atom=hydrogenAtoms[i], bond=bonds[i];
+    bond.visible=atom.userData.attached;
+    if(!bond.visible) return;
+    const start=carbon.position, end=atom.position;
+    const dir=new THREE.Vector3().subVectors(end,start); const len=dir.length();
+    bond.position.copy(start).add(end).multiplyScalar(.5);
+    bond.scale.set(1,Math.max(.001,len),1);
+    bond.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir.normalize());
+  }
+  function targetPosition(i){ return tetra[i].clone().multiplyScalar(targetRadius); }
+  function attachAtom(atom, slot){
+    atom.userData.attached=true; atom.userData.slot=slot;
+    atom.userData.target=targetPosition(slot);
+    atom.material.emissive.setHex(0x164b5a);
+    attachedCount=hydrogenAtoms.filter(a=>a.userData.attached).length;
+    updateMetrics();
+    if(attachedCount===4) { toast('Tetraedro formado! Observe os quatro domínios ao redor do carbono.'); completed.add(2); updateProgress(); }
+  }
+  function detachAtom(atom){
+    atom.userData.attached=false; atom.userData.target=null;
+    if(atom.userData.index!==undefined) bonds[atom.userData.index].visible=false;
+    attachedCount=hydrogenAtoms.filter(a=>a.userData.attached).length;
+    updateMetrics();
+  }
+  function tryAttach(atom){
+    const d=atom.position.distanceTo(carbon.position);
+    if(d<3.05){
+      const used=new Set(hydrogenAtoms.filter(a=>a.userData.attached && a!==atom).map(a=>a.userData.slot));
+      let slot=0; while(used.has(slot)&&slot<4) slot++;
+      if(slot<4){ attachAtom(atom,slot); atom.position.lerp(targetPosition(slot),.55); toast(`Ligação C–H ${slot+1} formada.`); return; }
+    }
+    // Átomos que não foram aproximados o suficiente permanecem livres.
+    atom.userData.attached=false;
+    attachedCount=hydrogenAtoms.filter(a=>a.userData.attached).length;
+    updateMetrics();
+  }
+  function autoBuild(){
+    hydrogenAtoms.forEach((a,i)=>{ a.userData.attached=true; a.userData.slot=i; a.userData.target=targetPosition(i); });
+    attachedCount=4; bonds.forEach((b)=>b.visible=true); completed.add(2); updateProgress(); drawProtractor(); updateMetrics();
+    toast('Arranjo tetraédrico organizado: quatro ligações equivalentes.');
+  }
+  function resetModel(){
+    hydrogenAtoms.forEach((a,i)=>{a.userData.attached=false;a.userData.slot=undefined;a.userData.target=null;a.position.copy(staging[i]);});
+    bonds.forEach(b=>b.visible=false); attachedCount=0; protractorGroup.visible=false; $('btn-protractor')?.classList.remove('active');
+    completed.delete(2); completed.delete(3); updateMetrics(); updateProgress(); toast('Modelo reiniciado. Arraste os quatro hidrogênios até o carbono.');
+  }
+  function avgAngle(){
+    const atoms=hydrogenAtoms.filter(a=>a.userData.attached);
+    if(atoms.length<2) return null;
+    const vals=[];
+    for(let i=0;i<atoms.length;i++) for(let j=i+1;j<atoms.length;j++){
+      const u=atoms[i].position.clone().normalize(), v=atoms[j].position.clone().normalize();
+      vals.push(Math.acos(Math.max(-1,Math.min(1,u.dot(v))))*180/Math.PI);
+    }
+    return vals.reduce((a,b)=>a+b,0)/vals.length;
+  }
+  function energyIndex(){
+    const a=hydrogenAtoms.filter(x=>x.userData.attached);
+    if(a.length<2) return null;
+    let sum=0,n=0;
+    for(let i=0;i<a.length;i++) for(let j=i+1;j<a.length;j++){
+      const theta=Math.acos(Math.max(-1,Math.min(1,a[i].position.clone().normalize().dot(a[j].position.clone().normalize()))))*180/Math.PI;
+      sum+=Math.pow(theta-109.47,2); n++;
+    }
+    return n ? sum/n : 0;
+  }
+  function updateMetrics(){
+    const n=hydrogenAtoms.filter(a=>a.userData.attached).length;
+    const angle=avgAngle();
+    const angleEl=$('live-angle'); if(angleEl) angleEl.textContent=angle===null?'—':`${angle.toFixed(1)}°`;
+    const bondsEl=$('live-bonds'); if(bondsEl) bondsEl.textContent=`${n}/4`;
+    const stateEl=$('model-state'); if(stateEl) stateEl.textContent=n===4?'Tetraedro completo':`${n} de 4 ligações`;
+    drawEnergyChart();
+  }
+  function drawEnergyChart(){
+    const c=$('energy-chart'); if(!c) return;
+    const w=c.clientWidth||250, h=95, dpr=Math.min(window.devicePixelRatio||1,2);
+    c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);
+    const ctx=c.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+    const pad={l:21,r:9,t:8,b:18}, pw=w-pad.l-pad.r, ph=h-pad.t-pad.b;
+    ctx.strokeStyle='rgba(150,185,205,.17)';ctx.lineWidth=1;
+    for(let i=0;i<4;i++){let y=pad.t+i*ph/3;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();}
+    const xMin=70,xMax=150;
+    const yVal=(a)=>Math.pow((a-109.47)/28,2)*.82+.08;
+    ctx.beginPath();
+    for(let i=0;i<=100;i++){let a=xMin+(xMax-xMin)*i/100;let x=pad.l+(a-xMin)/(xMax-xMin)*pw;let y=pad.t+(1-yVal(a))*ph;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
+    const grad=ctx.createLinearGradient(0,pad.t,0,h);grad.addColorStop(0,'rgba(105,225,239,.8)');grad.addColorStop(1,'rgba(105,225,239,.12)');
+    ctx.strokeStyle='#68dce9';ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle='rgba(105,225,239,.10)';ctx.lineTo(w-pad.r,h-pad.b);ctx.lineTo(pad.l,h-pad.b);ctx.closePath();ctx.fill();
+    const current=avgAngle();
+    if(current!==null){
+      const clamped=Math.max(xMin,Math.min(xMax,current)); const x=pad.l+(clamped-xMin)/(xMax-xMin)*pw; const y=pad.t+(1-yVal(clamped))*ph;
+      ctx.beginPath();ctx.arc(x,y,4.4,0,Math.PI*2);ctx.fillStyle='#ffd18b';ctx.fill();ctx.strokeStyle='#fff2cf';ctx.lineWidth=1.4;ctx.stroke();
+    }
+    ctx.fillStyle='#819aaa';ctx.font='9px Arial';ctx.textAlign='center';ctx.fillText('70°',pad.l,h-3);ctx.fillText('109,5°',pad.l+pw*(109.47-xMin)/(xMax-xMin),h-3);ctx.fillText('150°',w-pad.r,h-3);
+    ctx.save();ctx.translate(9,h/2);ctx.rotate(-Math.PI/2);ctx.fillText('E relativa',0,0);ctx.restore();
+  }
+
+  // Painel 3D simples para interação com controle no headset.
+  const vrPanel=new THREE.Group(); world.add(vrPanel); vrPanel.visible=false;
+  function canvasTexture(title, subtitle=''){ 
+    const c=document.createElement('canvas');c.width=512;c.height=180;const x=c.getContext('2d');
+    const g=x.createLinearGradient(0,0,512,180);g.addColorStop(0,'#123246');g.addColorStop(1,'#0a1927');x.fillStyle=g;x.fillRect(0,0,512,180);
+    x.strokeStyle='rgba(105,225,239,.48)';x.lineWidth=3;x.strokeRect(2,2,508,176);
+    x.fillStyle='#e9faff';x.font='700 36px Arial';x.textAlign='center';x.fillText(title,256,78);
+    x.fillStyle='#8db7c8';x.font='24px Arial';x.fillText(subtitle,256,123);
+    const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;
+  }
+  const vrBoard=new THREE.Mesh(new THREE.PlaneGeometry(1.65,1.45),new THREE.MeshBasicMaterial({map:canvasTexture('CONTROLES DO LABORATÓRIO','Aponte e aperte o gatilho'),transparent:false}));
+  vrBoard.position.set(2.0,1.7,.05);vrPanel.add(vrBoard);
+  const vrButtons=[];
+  const buttonDefs=[
+    {label:'MONTAR',sub:'tetraedro',fn:()=>autoBuild()},
+    {label:'MEDIR',sub:'ângulo 3D',fn:()=>toggleProtractor()},
+    {label:'PROJEÇÃO',sub:'cunha / tracejada',fn:()=>{setStage(4);toast('Observe a projeção no painel de aprendizagem.');}},
+    {label:'REINICIAR',sub:'nova tentativa',fn:()=>resetModel()}
+  ];
+  buttonDefs.forEach((d,i)=>{
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(.68,.43),new THREE.MeshBasicMaterial({map:canvasTexture(d.label,d.sub),transparent:false}));
+    m.position.set(1.55+(i%2)*.77,1.18-Math.floor(i/2)*.55,.04);m.userData.action=d.fn;m.userData.isVrButton=true;vrPanel.add(m);vrButtons.push(m);
+  });
+  const vrHelp=new THREE.Sprite(new THREE.SpriteMaterial({map:canvasTexture('PEGUE OS ÁTOMOS H','Use o gatilho do controle para agarrar'),transparent:true,depthWrite:false}));
+  vrHelp.position.set(-.2,2.25,0);vrHelp.scale.set(2.0,.7,1);vrPanel.add(vrHelp);
+
+  // Interação por mouse/toque e por ray dos controles XR.
+  function setRayFromController(controller){
+    const origin=new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld);
+    const direction=new THREE.Vector3(0,0,-1).applyQuaternion(controller.getWorldQuaternion(new THREE.Quaternion())).normalize();
+    raycaster.set(origin,direction);
+  }
+  function beginDragFromRay(){
+    const hits=raycaster.intersectObjects(atomPickables,false);
+    const h=hits.find(x=>x.object.userData.kind==='hydrogen');
+    if(!h) return false;
+    const atom=h.object;
+    if(atom.userData.attached) detachAtom(atom);
+    const n=raycaster.ray.direction.clone().normalize();
+    dragPlane.setFromNormalAndCoplanarPoint(n,atom.getWorldPosition(new THREE.Vector3()));
+    const point=new THREE.Vector3();raycaster.ray.intersectPlane(dragPlane,point);
+    dragOffset.copy(atom.getWorldPosition(new THREE.Vector3()).sub(point));
+    dragging={atom}; controls.enabled=false; atom.material.emissive.setHex(0x1a7182);return true;
+  }
+  function moveDragFromRay(){
+    if(!dragging) return;
+    const p=new THREE.Vector3();if(raycaster.ray.intersectPlane(dragPlane,p)){
+      p.add(dragOffset); const local=molecule.worldToLocal(p); dragging.atom.position.lerp(local,.8);
+    }
+  }
+  function endDrag(){
+    if(!dragging)return;
+    const a=dragging.atom;dragging=null;dragController=null;controls.enabled=!renderer.xr.isPresenting;
+    a.material.emissive.setHex(0x183c4c);tryAttach(a);
+  }
+  renderer.domElement.addEventListener('pointerdown',(e)=>{
+    if(renderer.xr.isPresenting) return;
+    const r=renderer.domElement.getBoundingClientRect();pointer.x=((e.clientX-r.left)/r.width)*2-1;pointer.y=-((e.clientY-r.top)/r.height)*2+1;
+    raycaster.setFromCamera(pointer,camera);pointerDown=beginDragFromRay();if(pointerDown){e.preventDefault();e.stopImmediatePropagation();renderer.domElement.setPointerCapture?.(e.pointerId);}
+  },true);
+  renderer.domElement.addEventListener('pointermove',(e)=>{
+    if(!dragging||renderer.xr.isPresenting)return;
+    const r=renderer.domElement.getBoundingClientRect();pointer.x=((e.clientX-r.left)/r.width)*2-1;pointer.y=-((e.clientY-r.top)/r.height)*2+1;
+    raycaster.setFromCamera(pointer,camera);moveDragFromRay();
+  });
+  renderer.domElement.addEventListener('pointerup',()=>{if(pointerDown){endDrag();pointerDown=false;}});
+  renderer.domElement.addEventListener('pointercancel',()=>{if(pointerDown){endDrag();pointerDown=false;}});
+
+  const controllers=[];
+  for(let i=0;i<2;i++){
+    const ctrl=renderer.xr.getController(i);scene.add(ctrl);
+    const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3(0,0,-4)]),new THREE.LineBasicMaterial({color:0x69e1ef,transparent:true,opacity:.85}));ctrl.add(line);
+    ctrl.addEventListener('selectstart',()=>{
+      setRayFromController(ctrl);
+      const uiHit=raycaster.intersectObjects(vrButtons,false)[0];
+      if(uiHit){uiHit.object.userData.action?.();return;}
+      if(beginDragFromRay()) dragController=ctrl;
+    });
+    ctrl.addEventListener('selectend',endDrag);
+    controllers.push(ctrl);
+  }
+
+  function toggleProtractor(){
+    protractorGroup.visible=!protractorGroup.visible;
+    if(protractorGroup.visible){drawProtractor();completed.add(3);updateProgress();toast('Transferidor ativado: compare duas ligações C–H.');}
+    else toast('Transferidor ocultado.');
+    $('btn-protractor')?.classList.toggle('active',protractorGroup.visible);
+  }
+
+  // Projeção didática: duas ligações no plano, uma cunha cheia e uma tracejada.
+  function projectionSVG(){return `<svg viewBox="0 0 260 224" role="img" aria-label="Projeção bidimensional do tetraedro com cunha cheia e tracejada">
+    <defs><pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" stroke="#d9edf5" stroke-width="1.4"/></pattern></defs>
+    <line x1="130" y1="111" x2="43" y2="69" stroke="#d9edf5" stroke-width="2.5"/><line x1="130" y1="111" x2="218" y2="69" stroke="#d9edf5" stroke-width="2.5"/>
+    <polygon points="123,117 137,117 82,205" fill="#d9edf5" opacity=".95"/><polygon points="123,105 137,105 190,203" fill="url(#hatch)" stroke="#b7d5e2" stroke-width=".7"/>
+    <circle cx="130" cy="111" r="14" fill="#183448" stroke="#69e1ef" stroke-width="1.5"/><text x="130" y="116" fill="#eafaff" font-size="13" font-weight="700" text-anchor="middle">C</text>
+    <text x="31" y="64" fill="#eaf6fb" font-size="13" font-weight="700">H</text><text x="225" y="64" fill="#eaf6fb" font-size="13" font-weight="700">H</text><text x="74" y="216" fill="#eaf6fb" font-size="13" font-weight="700">H</text><text x="192" y="216" fill="#eaf6fb" font-size="13" font-weight="700">H</text>
+    <text x="130" y="16" fill="#91adbd" font-size="9" text-anchor="middle" letter-spacing="1.2">REPRESENTAÇÃO CONVENCIONAL</text>
+    <text x="130" y="222" fill="#91adbd" font-size="8" text-anchor="middle">esquema didático · não está em escala</text>
+  </svg>`;}
+
+  const stageData=[
+    {eyebrow:'Estação 01 · Investigação',heading:'O que o desenho esconde?',title:'O desafio da representação 2D',subtitle:'Uma cruz no quadro não revela profundidade.',text:'No quadro, quatro ligações podem parecer uma cruz. Mas um desenho bidimensional não informa, sozinho, quais ligações estão à frente ou atrás do plano.',card:'Antes de entrar no laboratório',body:'Imagine quatro pares ligantes ao redor do carbono. Se eles ficassem no mesmo plano, poderiam se afastar tanto quanto no espaço?',metric:true,cta:'Explorar a teoria →',hint:'Observe a molécula de vários ângulos: a cruz plana não descreve o arranjo espacial.'},
+    {eyebrow:'Estação 02 · Modelo conceitual',heading:'A repulsão organiza o espaço',title:'VSEPR: quatro domínios ligantes',subtitle:'Os pares eletrônicos se afastam.',text:'A teoria VSEPR considera que regiões de densidade eletrônica ao redor do átomo central se organizam para reduzir repulsões. No CH₄, há quatro domínios ligantes e nenhum par isolado no carbono.',card:'Classificação VSEPR',body:'AX₄: A = carbono central; X₄ = quatro átomos ligados. Quatro domínios equivalentes conduzem à geometria tetraédrica.',metric:false,cta:'Montar a molécula →',hint:'Use a rotação da câmera para perceber que os quatro H ocupam direções diferentes no espaço.'},
+    {eyebrow:'Estação 03 · Construção',heading:'Monte o metano',title:'Construa o CH₄ no espaço',subtitle:'Aproxime cada H do carbono.',text:'Arraste os quatro átomos de hidrogênio até a região do carbono. Quando um H se aproxima, a ligação é formada e o modelo organiza os átomos em posições tetraédricas equivalentes.',card:'Desafio de montagem',body:'Tente fazer a montagem manualmente. Depois compare com “Organizar tetraedro”. Observe como a disposição espacial se ajusta para distribuir os quatro domínios.',metric:false,cta:'Organizar tetraedro',hint:'Arraste as esferas H até perto de C. No Pico Neo 3, aponte com o controle e aperte o gatilho para agarrar.'},
+    {eyebrow:'Estação 04 · Investigação angular',heading:'Meça a abertura entre ligações',title:'O ângulo tetraédrico',subtitle:'Aproxime-se de duas ligações e meça.',text:'O ângulo H–C–H ideal no metano é aproximadamente 109,5°. O transferidor 3D destaca o ângulo entre duas direções de ligação. Gire a molécula para investigar sua profundidade.',card:'Por que 109,5°?',body:'O arranjo tetraédrico distribui quatro direções de ligação de forma equivalente no espaço. Essa disposição reduz a repulsão entre os domínios ligantes em comparação com alternativas planas.',metric:false,cta:'Ativar transferidor 3D',hint:'Ative o transferidor. O valor ideal é aproximadamente 109,5°; compare com o valor mostrado.'},
+    {eyebrow:'Estação 05 · Representação',heading:'Traga o 3D de volta ao papel',title:'Cunha cheia e tracejada',subtitle:'Uma convenção para representar profundidade.',text:'Na projeção, linhas simples podem representar ligações no plano do papel. A cunha cheia indica uma ligação projetada para a frente; a cunha tracejada indica uma ligação orientada para trás.',card:'Leia a projeção',body:'Identifique no esquema a ligação que vem em direção ao observador e a que se afasta. A projeção é uma convenção gráfica: ela comunica profundidade sem substituir o modelo 3D.',metric:false,cta:'Ir para o quiz →',hint:'Compare a projeção com o tetraedro 3D ao lado. Frente e trás são informações espaciais.'},
+    {eyebrow:'Estação 06 · Avaliação formativa',heading:'Você domina o tetraedro?',title:'Quiz de consolidação',subtitle:'Cinco questões rápidas sobre o metano.',text:'Responda às questões para verificar a compreensão de VSEPR, hibridização, geometria e projeção. Leia a justificativa após cada resposta.',card:'Critério de sucesso',body:'Você deve conseguir explicar por que o metano é tetraédrico, identificar a hibridização sp³ e interpretar cunha cheia e tracejada.',metric:false,cta:'Recomeçar percurso',hint:'Responda ao quiz no painel de aprendizagem.'}
+  ];
+
+  const questions=[
+    {q:'Segundo a teoria VSEPR, por que os quatro domínios ligantes do metano se organizam no espaço?',o:['Para formar uma cruz plana.','Para minimizar as repulsões entre regiões de densidade eletrônica.','Para aproximar ao máximo os átomos de hidrogênio.','Porque o carbono possui pares isolados.'],a:1,e:'Correto. Os domínios eletrônicos se distribuem de modo a reduzir as repulsões; para quatro domínios equivalentes, o arranjo é tetraédrico.'},
+    {q:'Qual é a classificação VSEPR do metano (CH₄)?',o:['AX₂','AX₃E','AX₄','AX₄E'],a:2,e:'Correto. O carbono central (A) possui quatro átomos ligados (X₄) e nenhum par isolado: AX₄.'},
+    {q:'Qual é o ângulo H–C–H ideal no metano?',o:['90°','120°','180°','Aproximadamente 109,5°'],a:3,e:'Correto. O ângulo tetraédrico é aproximadamente 109,47°, normalmente apresentado como 109,5°.'},
+    {q:'Qual hibridização é associada ao carbono no metano?',o:['sp','sp²','sp³','d²sp³'],a:2,e:'Correto. No modelo de ligação usado no Ensino Médio, o carbono apresenta hibridização sp³ e quatro ligações sigma equivalentes.'},
+    {q:'Em uma projeção de cunha e tracejada, o que indica a cunha tracejada?',o:['Ligação que aponta para trás do plano do papel.','Ligação que aponta para frente do papel.','Ligação dupla.','Par de elétrons não ligante.'],a:0,e:'Correto. A cunha tracejada representa uma ligação orientada para trás do plano; a cunha cheia aponta para a frente.'}
+  ];
+  let quizIndex=0, quizScore=0, quizChosen=null, quizAnswered=false;
+
+  function renderStage(){
+    const d=stageData[currentStage];
+    $('right-eyebrow').textContent=d.eyebrow;$('right-heading').textContent=d.heading;
+    $('scene-title').textContent=d.title;$('scene-subtitle').textContent=d.subtitle;
+    $('interaction-hint').textContent=d.hint;
+    const content=$('stage-content');
+    if(currentStage===5){ renderQuiz(); return; }
+    content.innerHTML=`<p class="stage-text">${d.text}</p><div class="concept-card"><strong>${d.card}</strong><p>${d.body}</p></div>
+      ${currentStage===0?'<div class="metric-row"><div class="metric"><span>Fórmula</span><strong>CH₄</strong><em>metano</em></div><div class="metric"><span>Domínios ligantes</span><strong>4</strong><em>ao redor do C</em></div></div><div class="mini-label">Pergunta norteadora</div><p class="stage-text">Como os quatro pares de elétrons podem ficar o mais afastados possível?</p>':''}
+      ${currentStage===1?'<div class="metric-row"><div class="metric"><span>VSEPR</span><strong>AX₄</strong><em>quatro domínios</em></div><div class="metric"><span>Hibridização</span><strong>sp³</strong><em>modelo orbital</em></div></div>':''}
+      ${currentStage===2?'<div class="metric-row"><div class="metric"><span>Ligações formadas</span><strong id="live-bonds">0/4</strong><em id="model-state">0 de 4 ligações</em></div><div class="metric"><span>Ângulo médio</span><strong id="live-angle">—</strong><em>entre direções C–H</em></div></div><div class="button-row"><button class="action" id="build-action">Organizar tetraedro</button><button class="action ghost" id="reset-action">Reiniciar</button></div>':''}
+      ${currentStage===3?'<div class="metric-row"><div class="metric"><span>Ângulo ideal</span><strong>109,5°</strong><em>H–C–H</em></div><div class="metric"><span>Medida atual</span><strong id="live-angle">—</strong><em>média dos ângulos</em></div></div><div class="button-row"><button class="action" id="protractor-action">Ativar transferidor 3D</button><button class="action ghost" id="build-action">Ajustar modelo</button></div>':''}
+      ${currentStage===4?`<div class="mini-label">Projeção espacial</div><div class="projection">${projectionSVG()}</div><div class="legend"><span><i></i> no plano / para frente (cunha)</span><span><i class="dash"></i> para trás (tracejada)</span></div><div class="concept-card"><strong>Conecte as representações</strong><p>Gire o modelo 3D e depois localize as quatro ligações na projeção. A representação plana precisa de convenções para comunicar profundidade.</p></div>`:''}
+      <div class="button-row"><button class="action secondary" id="stage-next">${d.cta}</button></div>
+      <div class="chart-wrap"><div class="chart-head"><span>Energia de repulsão · modelo relativo</span><small>mínimo tetraédrico</small></div><canvas id="energy-chart"></canvas><div class="chart-note">Curva conceitual para comparar ângulos; não é cálculo quântico nem energia experimental do CH₄.</div></div>
+      <p class="footnote">Modelo didático: a geometria ideal do metano tem quatro ligações equivalentes. A hibridização sp³ é uma descrição de ligação, enquanto VSEPR prevê a geometria a partir dos domínios eletrônicos.</p>`;
+    $('stage-next').addEventListener('click',()=>{ if(currentStage===2 && attachedCount<4){ autoBuild(); } if(currentStage===3){toggleProtractor();} completed.add(currentStage); updateProgress(); if(currentStage<5)setStage(currentStage+1); else restartQuiz(); });
+    $('build-action')?.addEventListener('click',autoBuild);
+    $('reset-action')?.addEventListener('click',resetModel);
+    $('protractor-action')?.addEventListener('click',()=>{if(attachedCount<2)autoBuild();toggleProtractor();});
+    drawEnergyChart(); updateMetrics();
+  }
+  function setStage(i){
+    currentStage=Math.max(0,Math.min(5,i));
+    document.querySelectorAll('.step').forEach((b,k)=>{b.classList.toggle('active',k===currentStage);b.classList.toggle('done',completed.has(k));});
+    renderStage();updateProgress();
+  }
+  function updateProgress(){
+    const done=new Set(completed); if(currentStage>0)done.add(0); // entrar nas etapas conta como exploração iniciada
+    $('progress-label').textContent=`${done.size} de 6 etapas`;$('progress-fill').style.width=`${done.size/6*100}%`;
+    document.querySelectorAll('.step').forEach((b,k)=>b.classList.toggle('done',completed.has(k)));
+  }
+  document.querySelectorAll('.step').forEach(btn=>btn.addEventListener('click',()=>{
+    const target=Number(btn.dataset.step);
+    if(currentStage===0)completed.add(0);
+    if(currentStage===1)completed.add(1);
+    setStage(target);
+  }));
+
+  function renderQuiz(){
+    const content=$('stage-content');
+    if(quizIndex>=questions.length){
+      const pct=Math.round(quizScore/questions.length*100);
+      content.innerHTML=`<div class="quiz"><div class="quiz-top"><span>RESULTADO FINAL</span><span>5 questões</span></div><h3>${pct>=80?'Excelente domínio!':pct>=60?'Boa compreensão.':'Vamos consolidar mais um pouco.'}</h3><div class="metric-row"><div class="metric"><span>Acertos</span><strong>${quizScore}/5</strong><em>questões corretas</em></div><div class="metric"><span>Desempenho</span><strong>${pct}%</strong><em>aproveitamento</em></div></div><p class="stage-text">${pct>=80?'Você relaciona VSEPR, ângulo, geometria e projeção com segurança.': 'Revise a relação entre os quatro domínios eletrônicos, o tetraedro e a hibridização sp³. Depois, tente novamente.'}</p><div class="button-row"><button class="action" id="quiz-retry">Refazer quiz</button><button class="action secondary" id="quiz-finish">Concluir trilha</button></div></div><p class="footnote">Pós-VR sugerido: construa o CH₄ com palitos e massinha. Em seguida, desenhe sua projeção com cunha cheia e tracejada e justifique a geometria usando VSEPR.</p>`;
+      $('quiz-retry').addEventListener('click',restartQuiz);
+      $('quiz-finish').addEventListener('click',()=>{completed.add(5);updateProgress();toast('Trilha concluída. Leve a explicação para o modelo físico!');});
+      completed.add(5);updateProgress();return;
+    }
+    const q=questions[quizIndex];
+    content.innerHTML=`<div class="quiz"><div class="quiz-top"><span>QUESTÃO ${quizIndex+1} DE ${questions.length}</span><span>Acertos: ${quizScore}</span></div><h3>${q.q}</h3><div id="quiz-options">${q.o.map((o,i)=>`<button class="option" data-option="${i}"><b>${String.fromCharCode(65+i)}</b><span>${o}</span></button>`).join('')}</div><p class="feedback" id="quiz-feedback">Selecione uma alternativa.</p><div class="quiz-footer"><span class="quiz-score">${quizAnswered?'Resposta registrada':''}</span><button class="action" id="quiz-next" disabled>Próxima →</button></div></div><p class="footnote">O quiz é formativo: cada resposta vem acompanhada de uma justificativa para apoiar a discussão em sala.</p>`;
+    document.querySelectorAll('.option').forEach(btn=>btn.addEventListener('click',()=>{
+      if(quizAnswered)return;quizAnswered=true;quizChosen=Number(btn.dataset.option);
+      const ok=quizChosen===q.a;if(ok)quizScore++;
+      document.querySelectorAll('.option').forEach((b,i)=>{b.disabled=true;if(i===q.a)b.classList.add('correct');else if(i===quizChosen)b.classList.add('wrong');});
+      $('quiz-feedback').textContent=(ok?'✓ Correto. ':'Não é essa. ')+q.e;
+      $('quiz-next').disabled=false;
+    }));
+    $('quiz-next').addEventListener('click',()=>{quizIndex++;quizAnswered=false;quizChosen=null;renderQuiz();});
+  }
+  function restartQuiz(){quizIndex=0;quizScore=0;quizChosen=null;quizAnswered=false;setStage(5);}
+
+  $('view-reset').addEventListener('click',()=>{if(renderer.xr.isPresenting){toast('No VR, mova a cabeça para observar o modelo.');return;}camera.position.set(0,.15,9.2);controls.target.set(0,0,0);controls.update();});
+  $('rotate-toggle').addEventListener('click',()=>{rotationOn=!rotationOn;$('rotate-toggle').textContent=`ROTAÇÃO: ${rotationOn?'ON':'OFF'}`;$('rotate-toggle').classList.toggle('active',rotationOn);});
+
+  // Layout e escala de renderização.
+  function resize(){
+    const w=window.innerWidth,h=window.innerHeight;
+    renderer.setSize(w,h,false);camera.aspect=w/h;
+    if(w<520){
+      camera.position.z=11.2;
+      staging[0].set(-1.9,.95,.3); staging[1].set(1.9,.85,-.2); staging[2].set(-1.65,-1.15,.55); staging[3].set(1.7,-1.1,.4);
+      hydrogenAtoms.forEach((a,i)=>{if(!a.userData.attached && !dragging)a.position.copy(staging[i]);});
+    } else {
+      camera.position.z=9.2;
+      staging[0].set(-3.15,.7,.3); staging[1].set(3.0,.65,-.2); staging[2].set(-2.4,-1.15,.55); staging[3].set(2.55,-1.15,.4);
+      hydrogenAtoms.forEach((a,i)=>{if(!a.userData.attached && !dragging)a.position.copy(staging[i]);});
+    }
+    camera.updateProjectionMatrix();drawEnergyChart();
+  }
+  window.addEventListener('resize',resize,{passive:true});resize();
+
+  const desktopCameraPosition=camera.position.clone();
+  const desktopCameraQuaternion=camera.quaternion.clone();
+  const vrButton=VRButton.createButton(renderer,{optionalFeatures:['local-floor','bounded-floor']});
+  $('vr-slot').appendChild(vrButton);
+  renderer.xr.addEventListener('sessionstart',()=>{
+    camera.position.set(0,0,0);camera.rotation.set(0,0,0);camera.updateMatrixWorld(true);
+    world.position.set(0,0,-3.6);molecule.position.set(0,1.22,0);environment.position.set(0,1.22,0);
+    vrPanel.visible=true;controls.enabled=false;
+    toast('VR ativo. Use o gatilho do controle para agarrar os átomos.');
+  });
+  renderer.xr.addEventListener('sessionend',()=>{
+    camera.position.copy(desktopCameraPosition);camera.quaternion.copy(desktopCameraQuaternion);camera.updateMatrixWorld(true);
+    world.position.set(0,0,0);molecule.position.set(0,0,0);environment.position.set(0,0,0);
+    vrPanel.visible=false;controls.enabled=true;dragging=null;
+    toast('Você saiu do modo VR.');
+  });
+
+  const clock=new THREE.Clock();
+  let lastChartRefresh=0;
+  renderer.setAnimationLoop(()=>{
+    const dt=Math.min(clock.getDelta(),.05);
+    if(!renderer.xr.isPresenting) controls.update();
+    if(renderer.xr.isPresenting && dragging && dragController){ setRayFromController(dragController); moveDragFromRay(); }
+    if(rotationOn && !dragging) molecule.rotation.y += dt*.22;
+    hydrogenAtoms.forEach((a,i)=>{
+      if(a.userData.attached && a.userData.target && !(dragging&&dragging.atom===a)){
+        a.position.lerp(a.userData.target,Math.min(.22,dt*5.5));
+      }
+      updateBond(i);
+    });
+    if(protractorGroup.visible && attachedCount>=2 && clock.elapsedTime%0.25<dt) drawProtractor();
+    if(clock.elapsedTime-lastChartRefresh>.25){ updateMetrics(); lastChartRefresh=clock.elapsedTime; }
+    // Pequena pulsação luminosa para reforçar o centro molecular.
+    cGlow.scale.setScalar(1+.025*Math.sin(clock.elapsedTime*1.4));
+    renderer.render(scene,camera);
+  });
+
+  // Mensagem útil em navegadores sem WebXR; o botão oficial também faz sua própria detecção.
+  if(!('xr' in navigator)) toast('Modo 3D disponível. Para VR, abra em navegador compatível com WebXR via HTTPS.');
+  renderStage();
+  updateMetrics();
+</script>
+</body>
+</html>
